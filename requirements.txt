@@ -3,5 +3,6 @@ langchain-openai
 faiss-cpu
 pymupdf
 streamlit
-boto3
 python-dotenv
+unstructured
+pillow
