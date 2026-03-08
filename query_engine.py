@@ -51,11 +51,70 @@
 
 
 
+# from langchain_community.vectorstores import FAISS
+# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+# import os
+# from config import OPENAI_API_KEY
+
+# embeddings = OpenAIEmbeddings()
+
+# vectorstore = FAISS.load_local(
+#     "vector_store",
+#     embeddings,
+#     allow_dangerous_deserialization=True
+# )
+
+# llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+
+# def ask_question(user_query):
+
+#     retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+
+#     docs = retriever.invoke(user_query)
+
+#     text_context = []
+#     images = []
+
+#     for doc in docs:
+
+#         if doc.metadata["type"] == "text":
+#             text_context.append(doc.page_content)
+
+#         if doc.metadata["type"] == "image":
+#             images.append(doc.metadata["image_path"])
+
+#     # remove duplicate images
+#     images = list(set(images))
+
+#     context = "\n".join(text_context)
+
+#     prompt = f"""
+# You are a car manual assistant.
+
+# Answer using only the context provided from the manual.
+# If the answer is not in the context, say you don't know.
+
+# Context:
+# {context}
+
+# Question:
+# {user_query}
+# """
+
+#     response = llm.invoke(prompt)
+
+#     return {
+#         "text": response.content,
+#         "images": images
+#     }
+
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-import os
 from config import OPENAI_API_KEY
 
+
+# ---------- LOAD VECTOR STORE ----------
 embeddings = OpenAIEmbeddings()
 
 vectorstore = FAISS.load_local(
@@ -64,42 +123,82 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# ---------- LLM ----------
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0
+)
 
 
+# ---------- MAIN QUERY FUNCTION ----------
 def ask_question(user_query):
 
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+    # retrieve more docs for better recall
+    retriever = vectorstore.as_retriever(
+        search_kwargs={"k": 12}
+    )
 
     docs = retriever.invoke(user_query)
 
     text_context = []
     images = []
+    relevant_pages = set()
 
+    # ---------- COLLECT TEXT ----------
     for doc in docs:
 
-        if doc.metadata["type"] == "text":
+        if doc.metadata.get("type") == "text":
+
             text_context.append(doc.page_content)
 
-        if doc.metadata["type"] == "image":
-            images.append(doc.metadata["image_path"])
+            page = doc.metadata.get("page")
 
-    # remove duplicate images
+            if page is not None:
+                relevant_pages.add(page)
+
+    # ---------- COLLECT IMAGES FROM SAME PAGES ----------
+    for doc in docs:
+
+        if doc.metadata.get("type") == "image":
+
+            page = doc.metadata.get("page")
+
+            if page in relevant_pages:
+
+                images.append(doc.metadata.get("image_path"))
+
+    # remove duplicates
     images = list(set(images))
 
-    context = "\n".join(text_context)
+    # limit number of images
+    images = images[:2]
 
+    context = "\n\n".join(text_context)
+
+    # ---------- PROMPT ----------
     prompt = f"""
-You are a car manual assistant.
+You are an assistant helping users understand a Honda car manual.
 
-Answer using only the context provided from the manual.
-If the answer is not in the context, say you don't know.
+Use ONLY the provided context to answer the user's question.
+
+The context may come from:
+- diagram labels
+- manual text
+- control descriptions
+
+If the context includes diagram labels, explain where the component is located.
+
+If the answer cannot be found in the context, say:
+"I couldn't find that in the manual."
 
 Context:
 {context}
 
 Question:
 {user_query}
+
+Answer clearly and concisely.
 """
 
     response = llm.invoke(prompt)
