@@ -496,6 +496,199 @@
 
 
 
+# import fitz
+# import os
+# import io
+# import shutil
+# import pytesseract
+# import cv2
+# import numpy as np
+# from PIL import Image
+# import hashlib
+# import re
+
+# from caption_generation import generate_caption
+# from langchain_text_splitters import RecursiveCharacterTextSplitter
+# from langchain_community.vectorstores import FAISS
+# from langchain_openai import OpenAIEmbeddings
+# from langchain_core.documents import Document
+# from config import OPENAI_API_KEY
+
+
+# # ---------- SET TESSERACT PATH ----------
+# pytesseract.pytesseract.tesseract_cmd = r"Tesseract-OCR\tesseract.exe"
+
+
+# MIN_WIDTH = 250
+# MIN_HEIGHT = 250
+
+# IMAGE_DIR = "extracted_images"
+
+# os.makedirs(IMAGE_DIR, exist_ok=True)
+
+
+# # ---------- IMAGE FILTER ----------
+# def is_meaningful_image(img_bytes: bytes):
+#     try:
+#         img = Image.open(io.BytesIO(img_bytes))
+#         w, h = img.size
+
+#         if w < MIN_WIDTH or h < MIN_HEIGHT:
+#             return False
+
+#         if w > h * 15 or h > w * 15:
+#             return False
+
+#         return True
+#     except:
+#         return False
+
+
+# # ---------- OCR FUNCTION (IMPROVED) ----------
+# def extract_text_from_page(page):
+
+#     pix = page.get_pixmap(matrix=fitz.Matrix(3, 3))
+
+#     img_bytes = pix.tobytes("png")
+
+#     img_array = np.frombuffer(img_bytes, np.uint8)
+
+#     img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+#     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+#     # reduce noise
+#     gray = cv2.GaussianBlur(gray, (5, 5), 0)
+
+#     # adaptive threshold for diagrams
+#     thresh = cv2.adaptiveThreshold(
+#         gray,
+#         255,
+#         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+#         cv2.THRESH_BINARY,
+#         11,
+#         2
+#     )
+
+#     text = pytesseract.image_to_string(
+#         thresh,
+#         config="--oem 3 --psm 6"
+#     )
+
+#     return text
+
+
+# doc = fitz.open("data/manual.pdf")
+
+# documents = []
+
+# splitter = RecursiveCharacterTextSplitter(
+#     chunk_size=700,
+#     chunk_overlap=150
+# )
+
+# seen_images = set()
+
+
+# for page_number in range(len(doc)):
+
+#     page = doc[page_number]
+
+#     # ---------- TEXT EXTRACTION ----------
+#     pdf_text = page.get_text()
+
+#     ocr_text = extract_text_from_page(page)
+
+#     # text = pdf_text + "\n" + ocr_text
+#     text = pdf_text + "\n" + ocr_text
+
+# # clean OCR noise
+#     text = re.sub(r"[^A-Za-z0-9\s:/()-]", " ", text)
+#     text = re.sub(r"\s+", " ", text)
+
+#     chunks = splitter.split_text(text)
+
+#     for chunk in chunks:
+
+#         chunk = chunk.strip()
+
+#         # remove garbage OCR chunks
+#         if len(chunk) < 40:
+#             continue
+
+#         if chunk.count(" ") < 3:
+#             continue
+
+#         documents.append(
+#             Document(
+#                 page_content=chunk,
+#                 metadata={
+#                     "type": "text",
+#                     "page": page_number
+#                 }
+#             )
+#         )
+
+
+#     # ---------- IMAGE EXTRACTION ----------
+#     for img_idx, img_info in enumerate(page.get_images(full=True)):
+
+#         xref = img_info[0]
+
+#         base_image = doc.extract_image(xref)
+
+#         if not base_image:
+#             continue
+
+#         image_bytes = base_image["image"]
+
+#         if not is_meaningful_image(image_bytes):
+#             continue
+
+#         # remove duplicate images
+#         img_hash = hashlib.md5(image_bytes).hexdigest()
+
+#         if img_hash in seen_images:
+#             continue
+
+#         seen_images.add(img_hash)
+
+#         ext = base_image.get("ext", "png")
+
+#         filename = f"page_{page_number:03d}_extra_{img_idx+1:02d}.{ext}"
+
+#         filepath = os.path.join(IMAGE_DIR, filename)
+
+#         with open(filepath, "wb") as f:
+#             f.write(image_bytes)
+
+#         caption = generate_caption(filepath)
+
+#         documents.append(
+#             Document(
+#                 page_content=caption,
+#                 metadata={
+#                     "type": "image",
+#                     "page": page_number,
+#                     "image_path": filepath
+#                 }
+#             )
+#         )
+
+
+# # ---------- VECTOR STORE ----------
+# embeddings = OpenAIEmbeddings()
+
+# if os.path.exists("vector_store"):
+#     shutil.rmtree("vector_store")
+
+# vectorstore = FAISS.from_documents(documents, embeddings)
+
+# vectorstore.save_local("vector_store")
+
+# print("✅ Multimodal ingestion completed")
+
+
 import fitz
 import os
 import io
@@ -506,29 +699,26 @@ import numpy as np
 from PIL import Image
 import hashlib
 import re
+import json
 
 from caption_generation import generate_caption
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
-from config import OPENAI_API_KEY
 
 
-# ---------- SET TESSERACT PATH ----------
 pytesseract.pytesseract.tesseract_cmd = r"Tesseract-OCR\tesseract.exe"
 
+IMAGE_DIR = "extracted_images"
+os.makedirs(IMAGE_DIR, exist_ok=True)
 
 MIN_WIDTH = 250
 MIN_HEIGHT = 250
 
-IMAGE_DIR = "extracted_images"
 
-os.makedirs(IMAGE_DIR, exist_ok=True)
+def is_meaningful_image(img_bytes):
 
-
-# ---------- IMAGE FILTER ----------
-def is_meaningful_image(img_bytes: bytes):
     try:
         img = Image.open(io.BytesIO(img_bytes))
         w, h = img.size
@@ -540,14 +730,14 @@ def is_meaningful_image(img_bytes: bytes):
             return False
 
         return True
+
     except:
         return False
 
 
-# ---------- OCR FUNCTION (IMPROVED) ----------
 def extract_text_from_page(page):
 
-    pix = page.get_pixmap(matrix=fitz.Matrix(3, 3))
+    pix = page.get_pixmap(matrix=fitz.Matrix(3,3))
 
     img_bytes = pix.tobytes("png")
 
@@ -557,10 +747,8 @@ def extract_text_from_page(page):
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # reduce noise
-    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    gray = cv2.GaussianBlur(gray,(5,5),0)
 
-    # adaptive threshold for diagrams
     thresh = cv2.adaptiveThreshold(
         gray,
         255,
@@ -570,10 +758,7 @@ def extract_text_from_page(page):
         2
     )
 
-    text = pytesseract.image_to_string(
-        thresh,
-        config="--oem 3 --psm 6"
-    )
+    text = pytesseract.image_to_string(thresh)
 
     return text
 
@@ -581,6 +766,7 @@ def extract_text_from_page(page):
 doc = fitz.open("data/manual.pdf")
 
 documents = []
+debug_chunks = []
 
 splitter = RecursiveCharacterTextSplitter(
     chunk_size=700,
@@ -594,43 +780,18 @@ for page_number in range(len(doc)):
 
     page = doc[page_number]
 
-    # ---------- TEXT EXTRACTION ----------
     pdf_text = page.get_text()
 
     ocr_text = extract_text_from_page(page)
 
-    # text = pdf_text + "\n" + ocr_text
     text = pdf_text + "\n" + ocr_text
 
-# clean OCR noise
     text = re.sub(r"[^A-Za-z0-9\s:/()-]", " ", text)
     text = re.sub(r"\s+", " ", text)
 
-    chunks = splitter.split_text(text)
+    page_images = []
 
-    for chunk in chunks:
-
-        chunk = chunk.strip()
-
-        # remove garbage OCR chunks
-        if len(chunk) < 40:
-            continue
-
-        if chunk.count(" ") < 3:
-            continue
-
-        documents.append(
-            Document(
-                page_content=chunk,
-                metadata={
-                    "type": "text",
-                    "page": page_number
-                }
-            )
-        )
-
-
-    # ---------- IMAGE EXTRACTION ----------
+    # ---------- EMBEDDED IMAGE EXTRACTION ----------
     for img_idx, img_info in enumerate(page.get_images(full=True)):
 
         xref = img_info[0]
@@ -645,7 +806,6 @@ for page_number in range(len(doc)):
         if not is_meaningful_image(image_bytes):
             continue
 
-        # remove duplicate images
         img_hash = hashlib.md5(image_bytes).hexdigest()
 
         if img_hash in seen_images:
@@ -653,30 +813,78 @@ for page_number in range(len(doc)):
 
         seen_images.add(img_hash)
 
-        ext = base_image.get("ext", "png")
+        ext = base_image.get("ext","png")
 
-        filename = f"page_{page_number:03d}_extra_{img_idx+1:02d}.{ext}"
+        filename = f"page_{page_number:03d}_img_{img_idx+1}.{ext}"
 
         filepath = os.path.join(IMAGE_DIR, filename)
 
-        with open(filepath, "wb") as f:
+        with open(filepath,"wb") as f:
             f.write(image_bytes)
 
         caption = generate_caption(filepath)
 
+        if caption is None:
+            continue
+
+        page_images.append({
+            "path": filepath,
+            "caption": caption
+        })
+
+
+    # ---------- PAGE IMAGE FALLBACK ----------
+    if len(page_images) == 0:
+
+        pix = page.get_pixmap(matrix=fitz.Matrix(2,2))
+
+        filename = f"page_{page_number:03d}_full.png"
+
+        filepath = os.path.join(IMAGE_DIR, filename)
+
+        pix.save(filepath)
+
+        caption = generate_caption(filepath)
+
+        if caption is not None:
+
+            page_images.append({
+                "path": filepath,
+                "caption": caption
+            })
+
+
+    # ---------- CHUNKING ----------
+    chunks = splitter.split_text(text)
+
+    for chunk_id, chunk in enumerate(chunks):
+
+        chunk = chunk.strip()
+
+        if len(chunk.split()) < 2:
+            continue
+
+        metadata = {
+            "page": page_number,
+            "chunk_id": chunk_id,
+            "images": page_images
+        }
+
         documents.append(
             Document(
-                page_content=caption,
-                metadata={
-                    "type": "image",
-                    "page": page_number,
-                    "image_path": filepath
-                }
+                page_content=chunk,
+                metadata=metadata
             )
         )
 
+        debug_chunks.append({
+            "page": page_number,
+            "chunk_id": chunk_id,
+            "text": chunk,
+            "images": page_images
+        })
 
-# ---------- VECTOR STORE ----------
+
 embeddings = OpenAIEmbeddings()
 
 if os.path.exists("vector_store"):
@@ -686,4 +894,9 @@ vectorstore = FAISS.from_documents(documents, embeddings)
 
 vectorstore.save_local("vector_store")
 
-print("✅ Multimodal ingestion completed")
+
+with open("chunks_debug.json","w",encoding="utf-8") as f:
+    json.dump(debug_chunks,f,indent=2,ensure_ascii=False)
+
+
+print("Multimodal ingestion completed")

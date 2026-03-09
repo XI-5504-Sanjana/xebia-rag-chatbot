@@ -109,12 +109,110 @@
 #         "images": images
 #     }
 
+# from langchain_community.vectorstores import FAISS
+# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+# from config import OPENAI_API_KEY
+
+
+# # ---------- LOAD VECTOR STORE ----------
+# embeddings = OpenAIEmbeddings()
+
+# vectorstore = FAISS.load_local(
+#     "vector_store",
+#     embeddings,
+#     allow_dangerous_deserialization=True
+# )
+
+
+# # ---------- LLM ----------
+# llm = ChatOpenAI(
+#     model="gpt-4o-mini",
+#     temperature=0
+# )
+
+
+# # ---------- MAIN QUERY FUNCTION ----------
+# def ask_question(user_query):
+
+#     # retrieve more docs for better recall
+#     retriever = vectorstore.as_retriever(
+#         search_kwargs={"k": 12}
+#     )
+
+#     docs = retriever.invoke(user_query)
+
+#     text_context = []
+#     images = []
+#     relevant_pages = set()
+
+#     # ---------- COLLECT TEXT ----------
+#     for doc in docs:
+
+#         if doc.metadata.get("type") == "text":
+
+#             text_context.append(doc.page_content)
+
+#             page = doc.metadata.get("page")
+
+#             if page is not None:
+#                 relevant_pages.add(page)
+
+#     # ---------- COLLECT IMAGES FROM SAME PAGES ----------
+#     for doc in docs:
+
+#         if doc.metadata.get("type") == "image":
+
+#             page = doc.metadata.get("page")
+
+#             if page in relevant_pages:
+
+#                 images.append(doc.metadata.get("image_path"))
+
+#     # remove duplicates
+#     images = list(set(images))
+
+#     # limit number of images
+#     images = images[:2]
+
+#     context = "\n\n".join(text_context)
+
+#     # ---------- PROMPT ----------
+#     prompt = f"""
+# You are an assistant helping users understand a Honda car manual.
+
+# Use ONLY the provided context to answer the user's question.
+
+# The context may come from:
+# - diagram labels
+# - manual text
+# - control descriptions
+
+# If the context includes diagram labels, explain where the component is located.
+
+# If the answer cannot be found in the context, say:
+# "I couldn't find that in the manual."
+
+# Context:
+# {context}
+
+# Question:
+# {user_query}
+
+# Answer clearly and concisely.
+# """
+
+#     response = llm.invoke(prompt)
+
+#     return {
+#         "text": response.content,
+#         "images": images
+#     }
+
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from config import OPENAI_API_KEY
 
 
-# ---------- LOAD VECTOR STORE ----------
 embeddings = OpenAIEmbeddings()
 
 vectorstore = FAISS.load_local(
@@ -123,74 +221,47 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-
-# ---------- LLM ----------
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
 
 
-# ---------- MAIN QUERY FUNCTION ----------
 def ask_question(user_query):
 
-    # retrieve more docs for better recall
-    retriever = vectorstore.as_retriever(
-        search_kwargs={"k": 12}
-    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
 
     docs = retriever.invoke(user_query)
 
-    text_context = []
+    context_chunks = []
     images = []
-    relevant_pages = set()
 
-    # ---------- COLLECT TEXT ----------
+    query_embedding = embeddings.embed_query(user_query)
+
     for doc in docs:
 
-        if doc.metadata.get("type") == "text":
+        context_chunks.append(doc.page_content)
 
-            text_context.append(doc.page_content)
+        if "images" in doc.metadata:
 
-            page = doc.metadata.get("page")
+            for img in doc.metadata["images"]:
 
-            if page is not None:
-                relevant_pages.add(page)
+                caption_embedding = embeddings.embed_query(img["caption"])
 
-    # ---------- COLLECT IMAGES FROM SAME PAGES ----------
-    for doc in docs:
+                similarity = sum(a*b for a, b in zip(query_embedding, caption_embedding))
 
-        if doc.metadata.get("type") == "image":
+                if similarity > 0.35:
 
-            page = doc.metadata.get("page")
+                    images.append(img["path"])
 
-            if page in relevant_pages:
+    images = list(set(images))[:2]
 
-                images.append(doc.metadata.get("image_path"))
+    context = "\n\n".join(context_chunks)
 
-    # remove duplicates
-    images = list(set(images))
-
-    # limit number of images
-    images = images[:2]
-
-    context = "\n\n".join(text_context)
-
-    # ---------- PROMPT ----------
     prompt = f"""
 You are an assistant helping users understand a Honda car manual.
 
-Use ONLY the provided context to answer the user's question.
-
-The context may come from:
-- diagram labels
-- manual text
-- control descriptions
-
-If the context includes diagram labels, explain where the component is located.
-
-If the answer cannot be found in the context, say:
-"I couldn't find that in the manual."
+Use ONLY the context provided from the manual.
 
 Context:
 {context}

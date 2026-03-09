@@ -12,7 +12,7 @@ vectorstore = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-docs = vectorstore.similarity_search("headlight", k=5)
+docs = vectorstore.similarity_search("start button", k=5)
 
 for d in docs:
     print(d.metadata)
