@@ -11,3 +11,7 @@ extracted_images/
 .vscode/
 
 Tesseract-OCR/
+
+figures/
+
+extracted_figures/
