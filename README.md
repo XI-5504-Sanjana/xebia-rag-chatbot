@@ -112,7 +112,7 @@ These captions allow images to be searched using natural language.
 
 ---
 
-## qa_pipeline.py
+## query_engine.py
 
 This file answers user questions.
 
@@ -229,7 +229,7 @@ This will:
 Run the QA pipeline:
 
 ```
-python qa_pipeline.py
+python query_engine.py
 ```
 
 Example question:
