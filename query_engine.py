@@ -403,7 +403,7 @@ def ask_question(user_query: str) -> Dict[str, Any]:
     """
 
     # 1. Retrieve text context
-    docs_and_scores = vectorstore.similarity_search_with_score(user_query, k=8)
+    docs_and_scores = vectorstore.similarity_search_with_score(user_query, k=5)
     context_chunks = [doc.page_content for doc, _score in docs_and_scores]
 
     # 2. Find candidate images
