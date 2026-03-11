@@ -18,3 +18,5 @@ streamlit
 python-dotenv
 
 openai
+
+unstructured

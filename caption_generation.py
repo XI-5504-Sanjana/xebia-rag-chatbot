@@ -43,8 +43,7 @@ def generate_caption(image_path: str, model: str = "gpt-4o-mini") -> str:
         "2) Explain what the diagram is mainly illustrating (for example, the location or "
         "function of a control).\n"
         "3) Do NOT guess about behavior or features that are not directly visible in the image."
-        "4)If the image ONLY contains plain text or paragraph text from the manual,"
-        "respond exactly with: This image only has text in it"
+        
     )
 
     try:

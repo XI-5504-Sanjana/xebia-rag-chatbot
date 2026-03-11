@@ -2,3 +2,14 @@ venv/
 __pycache__/
 .env
 *.pyc
+
+manual/
+vector_store/
+extracted_images/
+extracted_figures/
+
+.vscode/
+
+Tesseract-OCR/
+
+figures/
