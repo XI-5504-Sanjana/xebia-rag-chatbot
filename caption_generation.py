@@ -1,4 +1,4 @@
-#Image Caption Generator -- this file generates ai captions for manual diagrms
+
 import base64
 import mimetypes
 from openai import OpenAI
