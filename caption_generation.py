@@ -1,3 +1,4 @@
+#Image Caption Generator -- this file generates ai captions for manual diagrms
 import base64
 import mimetypes
 from openai import OpenAI
@@ -5,27 +6,27 @@ from config import OPENAI_API_KEY
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-
+#Base64 is a way to convert binary data (like images) into text format. open the image file, read the file as bianry data , convert binary data -> base 64 string -> return the string 
 def encode_image_to_base64(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode("utf-8")
+        return base64.b64encode(image_file.read()).decode("utf-8")#the image file -> converted -> text string , the text string is wht gets sents to ai model
 
-
+#detect wht type of image file it is ?
 def guess_mime_type(image_path: str) -> str:
     mime_type, _ = mimetypes.guess_type(image_path)
     if mime_type is None:
         return "image/png"
     return mime_type
 
-
+#it sends the image to the ai model and asks it to describe the diagram .
 def generate_caption(image_path: str, model: str = "gpt-4o-mini") -> str:
     """
     Generate a technical caption for a car manual image.
     Returns a plain text string; on error returns a fallback message.
     """
 
-    base64_image = encode_image_to_base64(image_path)
-    mime_type = guess_mime_type(image_path)
+    base64_image = encode_image_to_base64(image_path) #encode the image 
+    mime_type = guess_mime_type(image_path) #detect image type 
 
     data_url = f"data:{mime_type};base64,{base64_image}"
 

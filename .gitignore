@@ -1,17 +1,15 @@
+venv/
 __pycache__/
-*.pyc
-*.pyo
-
 .env
-manual/
+*.pyc
 
+manual/
 vector_store/
 extracted_images/
+extracted_figures/
 
 .vscode/
 
 Tesseract-OCR/
 
 figures/
-
-extracted_figures/
